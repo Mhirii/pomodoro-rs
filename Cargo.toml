@@ -1,0 +1,12 @@
+[package]
+name = "pomodoro"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.28", features = ["derive"] }
+crossterm = "0.28.1"
+# notify-rust = "4.11.4"
+notify-rust = { git = "https://github.com/rdunnington/notify-rust.git", branch = "fix-zbus-dep" }
+serde = "1.0.217"
+serde_json = "1.0.138"
