@@ -11,10 +11,8 @@ use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let command = parse_args();
-
     let config = Config::load_or_default()?;
-    println!("Stopping the timer...");
-    let state = PomodoroState::new(&config);
+    let mut state = PomodoroState::new(&config);
 
     match command {
         CliCommand::Start {
@@ -41,7 +39,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("Pomodoro session started.");
         }
         CliCommand::Status => match state.load()? {
-            Some(state) => {
+            Some(mut state) => {
+                let err = state.check_update_interval();
+                if let Err(e) = err {
+                    println!("Error: {}", e);
+                }
                 let status = state.get_formatted_status()?;
                 println!("{}", status);
             }
@@ -57,14 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         CliCommand::EnableWatch => {
             if state.is_active()? {
-                let config = Config::new(
-                    config.work_duration,
-                    config.break_duration,
-                    config.filepath,
-                    true,
-                );
-                let mut state = PomodoroState::new(&config);
-                let res = timer::watch_pomodoro(&mut state);
+                let res = state.watch();
                 if let Err(e) = res {
                     println!("Error: {}", e);
                 }

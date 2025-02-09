@@ -1,8 +1,11 @@
 use crate::config::Config;
+use crate::notifications;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,5 +84,79 @@ impl PomodoroState {
             remaining / 60,
             remaining % 60
         ))
+    }
+
+    pub fn watch(mut self) -> Result<(), Box<dyn std::error::Error>> {
+        loop {
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+
+            if current_time < self.start_time {
+                self.start_time = current_time;
+            }
+
+            let elapsed = current_time - self.start_time;
+
+            let total_duration = if self.is_working {
+                self.work_duration
+            } else {
+                self.break_duration
+            };
+
+            let remaining = if elapsed >= total_duration {
+                0
+            } else {
+                total_duration - elapsed
+            };
+
+            print!("\r{}", self.get_formatted_status()?);
+            std::io::Write::flush(&mut std::io::stdout())?;
+
+            if remaining == 0 {
+                if self.is_working {
+                    notifications::notify("Pomodoro", "Time for a break!");
+                    self.is_working = false;
+                } else {
+                    notifications::notify("Pomodoro", "Back to work!");
+                    self.is_working = true;
+                }
+                self.start_time = current_time;
+                self.save()?;
+                println!();
+            }
+
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+
+    pub fn check_update_interval(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
+        let total_duration = if self.is_working {
+            println!("WORK - Current time: {}", current_time);
+            self.work_duration
+        } else {
+            println!("BREAK - Current time: {}", current_time);
+            self.break_duration
+        };
+
+        let elapsed = current_time - self.start_time;
+
+        if elapsed >= total_duration {
+            println!(
+                "Time for a {} session. elapsed: {}, total: {}",
+                if self.is_working { "break" } else { "work" },
+                elapsed,
+                total_duration
+            );
+            self.is_working = !self.is_working;
+            self.start_time = current_time;
+        }
+        Ok(())
     }
 }
